@@ -65,7 +65,7 @@ pub fn is_voiced(s: &str) -> bool {
     if let Some(last_char) = s.chars().last() {
         let u_row = ['う', 'く', 'ぐ', 'す', 'つ', 'ぬ', 'ぶ', 'む', 'る'];
         if u_row.contains(&last_char) {
-            return matches!(last_char, 'ぐ' | 'ぶ' | 'ぬ');
+            return matches!(last_char, 'ぐ' | 'ぶ' | 'ぬ' | 'む');
         }
     }
     false
