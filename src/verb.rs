@@ -53,13 +53,14 @@ impl Verb {
         }
     }
 
-    // pub fn ichidan(base: &str, furigana: &str) -> Self {
-    //     Verb {
-    //         furigana: furigana.to_string(),
-    //         base_form: base.to_string(),
-    //         is_godan: false,
-    //     }
-    // }
+    pub fn ichidan(base: &str, ender: &str, furigana: &str) -> Self {
+        Verb {
+            furigana: furigana.to_string(),
+            base: base.to_string(),
+            ender: ender.to_string(),
+            is_godan: false,
+        }
+    }
 
     pub fn conjugate(
         &mut self,
