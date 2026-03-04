@@ -1,10 +1,12 @@
+# 上手！！！
+
 ![](./assets/demo.gif)
 
 Practice your japanese conjugations in the comfort of your shell.
 
 ## Installation
 
-Not published on cargo yet but you can build from source.
+Not published on crates.io yet but you can build from source.
 
 - Building from source code
 
@@ -13,6 +15,10 @@ Not published on cargo yet but you can build from source.
   cd jouzu-cli
   cargo run
   ```
+
+## Extending word bank
+
+The word bank is located in the root of the project, in the future I want to implement 
 
 ## Current Scope
 
