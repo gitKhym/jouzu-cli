@@ -18,7 +18,7 @@ Not published on crates.io yet but you can build from source.
 
 ## Extending word bank
 
-The word bank is located in the root of the project, in the future I want to implement 
+The word bank is located in the root of the project, in the future I want to integrate Anki so users can import their own words easier.
 
 ## Current Scope
 
