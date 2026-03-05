@@ -8,25 +8,12 @@ use crate::utils::{is_voiced, last, to_a, to_i};
 pub enum ConjugationKind {
     Polite = 1,
     Passive = 2,
-    Continuous = 3,
-    Desire = 4,
-    Negation = 5,
-    Past = 6,
-    Te = 7,
-}
-
-impl fmt::Display for ConjugationKind {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            ConjugationKind::Polite => write!(f, "Polite"),
-            ConjugationKind::Passive => write!(f, "Passive"),
-            ConjugationKind::Continuous => write!(f, "Continuous"),
-            ConjugationKind::Desire => write!(f, "たい form"),
-            ConjugationKind::Negation => write!(f, "Negative"),
-            ConjugationKind::Past => write!(f, "Past"),
-            ConjugationKind::Te => write!(f, "て form"),
-        }
-    }
+    Causative = 3,
+    Continuous = 4,
+    Desire = 5,
+    Negation = 6,
+    Past = 7,
+    Te = 8,
 }
 
 #[derive(Debug, PartialEq, PartialOrd, Default, Deserialize, Clone)]
@@ -35,7 +22,30 @@ pub struct Verb {
     pub furigana: String, // はな
     pub base: String,     // 話
     pub ender: String,    // す
-    pub is_godan: bool,   // true
+    pub kind: VerbKind,   // godan
+}
+
+#[derive(Debug, PartialEq, PartialOrd, Default, Deserialize, Clone)]
+pub enum VerbKind {
+    #[default]
+    Ichidan,
+    Godan,
+    Irregular,
+}
+
+impl fmt::Display for ConjugationKind {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            ConjugationKind::Polite => write!(f, "Polite"),
+            ConjugationKind::Passive => write!(f, "Passive"),
+            ConjugationKind::Causative => write!(f, "Causative"),
+            ConjugationKind::Continuous => write!(f, "Continuous"),
+            ConjugationKind::Desire => write!(f, "たい form"),
+            ConjugationKind::Negation => write!(f, "Negative"),
+            ConjugationKind::Past => write!(f, "Past"),
+            ConjugationKind::Te => write!(f, "て form"),
+        }
+    }
 }
 
 #[derive(Debug)]
@@ -49,7 +59,7 @@ impl Verb {
             furigana: furigana.to_string(),
             base: base.to_string(),
             ender: ender.to_string(),
-            is_godan: true,
+            kind: VerbKind::Godan,
         }
     }
 
@@ -58,24 +68,32 @@ impl Verb {
             furigana: furigana.to_string(),
             base: base.to_string(),
             ender: ender.to_string(),
-            is_godan: false,
+            kind: VerbKind::Ichidan,
+        }
+    }
+
+    pub fn irregular(base: &str, ender: &str, furigana: &str) -> Self {
+        Verb {
+            furigana: furigana.to_string(),
+            base: base.to_string(),
+            ender: ender.to_string(),
+            kind: VerbKind::Irregular,
         }
     }
 
     pub fn conjugate(
         &mut self,
         transformations: &mut Vec<ConjugationKind>,
-    ) -> Result<(), ConjugationError> {
+    ) -> Result<&mut Self, ConjugationError> {
         transformations.sort();
 
         let mut previous_conjugation = None;
         for transformation in transformations {
-            self.apply_conjunction(&transformation, previous_conjugation)
-                .unwrap();
+            self.apply_conjunction(&transformation, previous_conjugation)?;
             previous_conjugation = Some(transformation);
         }
 
-        Ok(())
+        Ok(self)
     }
 
     pub fn get_word(&self) -> String {
@@ -100,6 +118,10 @@ impl Verb {
                 self.passive(previous);
                 Ok(())
             }
+            ConjugationKind::Causative => {
+                self.causative(previous);
+                Ok(())
+            }
             ConjugationKind::Past => {
                 self.past(previous);
                 Ok(())
@@ -121,8 +143,23 @@ impl Verb {
             }
         }
     }
+
     fn passive(&mut self, previous: Option<&ConjugationKind>) {
         let conjugation_str = "れる";
+        match previous {
+            None => {
+                let last = last(&self.ender);
+                self.ender.pop();
+                self.ender.push(to_a(&last));
+            }
+            _ => panic!("Incorrect grammar, wrong conjugation precedence"),
+        }
+
+        self.ender.push_str(conjugation_str);
+    }
+
+    fn causative(&mut self, previous: Option<&ConjugationKind>) {
+        let conjugation_str = "せる";
         match previous {
             None => {
                 let last = last(&self.ender);
@@ -140,7 +177,7 @@ impl Verb {
 
         match previous {
             None => {
-                if self.is_godan {
+                if self.kind == VerbKind::Godan {
                     let last = last(&self.ender);
                     self.ender.pop();
                     self.ender.push(to_a(&last));
@@ -168,7 +205,11 @@ impl Verb {
 
         match previous {
             None => {
-                if self.is_godan {
+                if self.kind == VerbKind::Irregular {
+                    if self.ender.ends_with("する") {
+                        self.ender = self.ender.replace("する", "し");
+                    }
+                } else if self.kind == VerbKind::Godan {
                     let last = last(&self.ender);
                     self.ender.pop();
 
@@ -204,7 +245,7 @@ impl Verb {
     fn desire(&mut self, previous: Option<&ConjugationKind>) {
         let conjugation_str = "たい";
 
-        if self.is_godan {
+        if self.kind == VerbKind::Godan {
             match previous {
                 None => {
                     let last = last(&self.ender);
@@ -233,13 +274,11 @@ impl Verb {
     }
 
     fn continous(&mut self, previous: Option<&ConjugationKind>) {
-        let mut conjugation_str = "いる";
+        let conjugation_str = "いる";
 
         match previous {
             None => {
-                if self.is_godan {
-                    conjugation_str = "いる";
-
+                if self.kind == VerbKind::Godan {
                     let last = last(&self.ender);
                     self.ender.pop();
 
@@ -253,17 +292,19 @@ impl Verb {
                     }
                 } else {
                     self.ender.pop();
+                    self.ender.push_str("て");
                 }
             }
 
             Some(ConjugationKind::Negation) | Some(ConjugationKind::Desire) => {
                 // Consume い
                 self.ender.pop();
-                self.ender.push_str("く")
+                self.ender.push_str("くて")
             }
             Some(ConjugationKind::Passive) => {
                 // Consume る
                 self.ender.pop();
+                self.ender.push_str("て");
             }
 
             _ => panic!(
@@ -280,7 +321,7 @@ impl Verb {
 
         match previous {
             None => {
-                if self.is_godan {
+                if self.kind == VerbKind::Godan {
                     let last = last(&self.ender);
                     self.ender.pop();
 
@@ -305,17 +346,6 @@ impl Verb {
                 // Consume る
                 self.ender.pop();
             }
-
-            // Some(ConjugationKind::Past | ConjugationKind::Continuous) => {
-            //     let msg = match previous.unwrap() {
-            //         ConjugationKind::Past => "Te form cannot be combined with Past form",
-            //         ConjugationKind::Continuous => {
-            //             "Te form cannot be combined with Continuous form"
-            //         }
-            //         _ => unreachable!(),
-            //     };
-            //     return Err(ConjugationError::InvalidCombinations(msg.to_string()));
-            // }
             _ => panic!(
                 "Incorrect grammar, wrong conjugation precedence, previous: {:?}",
                 previous
@@ -324,4 +354,108 @@ impl Verb {
 
         self.ender.push_str(conjugation_str);
     }
+}
+
+#[cfg(test)]
+#[test]
+fn verb_su() {
+    let verb = Verb::godan("話", "す", "はな");
+
+    // Present
+    let mut c = vec![];
+    assert_eq!(verb.clone().conjugate(&mut c).unwrap().get_word(), "話す");
+
+    // Present negative
+    let mut c = vec![ConjugationKind::Negation];
+    assert_eq!(
+        verb.clone().conjugate(&mut c).unwrap().get_word(),
+        "話さない"
+    );
+
+    // Past
+    let mut c = vec![ConjugationKind::Past];
+    assert_eq!(verb.clone().conjugate(&mut c).unwrap().get_word(), "話した");
+
+    // Past negative
+    let mut c = vec![ConjugationKind::Negation, ConjugationKind::Past];
+    assert_eq!(
+        verb.clone().conjugate(&mut c).unwrap().get_word(),
+        "話さなかった"
+    );
+
+    // Te form
+    let mut c = vec![ConjugationKind::Te];
+    assert_eq!(verb.clone().conjugate(&mut c).unwrap().get_word(), "話して");
+
+    // Negative Te form
+    c = vec![ConjugationKind::Te, ConjugationKind::Negation];
+    assert_eq!(
+        verb.clone().conjugate(&mut c).unwrap().get_word(),
+        "話さなくて"
+    );
+
+    // Present Tai form
+    c = vec![ConjugationKind::Desire];
+    assert_eq!(
+        verb.clone().conjugate(&mut c).unwrap().get_word(),
+        "話したい"
+    );
+
+    // Past Tai form
+    c = vec![ConjugationKind::Past, ConjugationKind::Desire];
+    assert_eq!(
+        verb.clone().conjugate(&mut c).unwrap().get_word(),
+        "話したかった"
+    );
+
+    // Present Negative Tai form
+    c = vec![ConjugationKind::Negation, ConjugationKind::Desire];
+    assert_eq!(
+        verb.clone().conjugate(&mut c).unwrap().get_word(),
+        "話したくない"
+    );
+
+    // Past Negative Tai form
+    c = vec![
+        ConjugationKind::Past,
+        ConjugationKind::Negation,
+        ConjugationKind::Desire,
+    ];
+    assert_eq!(
+        verb.clone().conjugate(&mut c).unwrap().get_word(),
+        "話したくなかった"
+    );
+
+    // Te form & Tai form
+    c = vec![ConjugationKind::Te, ConjugationKind::Desire];
+    assert_eq!(
+        verb.clone().conjugate(&mut c).unwrap().get_word(),
+        "話したくて"
+    );
+
+    // Negative Te form & Tai form
+    c = vec![
+        ConjugationKind::Negation,
+        ConjugationKind::Te,
+        ConjugationKind::Desire,
+    ];
+    assert_eq!(
+        verb.clone().conjugate(&mut c).unwrap().get_word(),
+        "話したくなくて"
+    );
+
+    // Negative Te form & Tai form
+    c = vec![
+        ConjugationKind::Negation,
+        ConjugationKind::Te,
+        ConjugationKind::Desire,
+    ];
+    assert_eq!(
+        verb.clone().conjugate(&mut c).unwrap().get_word(),
+        "話したくなくて"
+    );
+
+    // TODO: Volitional 話そう
+    // TODO: Adverbial 話したく
+    // TODO: Conditional 話したければ
 }

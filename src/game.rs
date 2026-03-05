@@ -11,9 +11,9 @@ use crate::{
 
 #[derive(Debug, Default)]
 pub struct Game {
-    pub correct: u16,
+    pub correct_count: u16,
+    pub attempts: u16,
     pub active_conjugations: Vec<ConjugationKind>,
-    pub round_num: usize,
     pub round: Round,
 }
 
@@ -27,9 +27,9 @@ pub enum Feedback {
 impl Game {
     pub fn new() -> Self {
         Self {
-            correct: 0,
+            correct_count: 0,
+            attempts: 0,
             active_conjugations: vec![ConjugationKind::Negation],
-            round_num: 0,
             round: Round {
                 word_to_conjugate: Verb::godan("", "", ""),
                 conjugations_to_apply: Vec::new(),
@@ -38,24 +38,16 @@ impl Game {
     }
 
     pub fn new_round(&mut self) {
-        self.round_num += 1;
-
         self.round = Round {
             word_to_conjugate: Self::get_random_verb(),
             conjugations_to_apply: Self::get_random_conjugations(),
         }
     }
 
-    // TODO: Implement getting random verb from a file
     pub fn get_random_verb() -> Verb {
-        // Open the JSON file
         let file = File::open("word_bank.json").expect("Failed to open word_bank.json");
         let reader = BufReader::new(file);
-
-        // Deserialize into a Vec<Verb>
         let verbs: Vec<Verb> = from_reader(reader).expect("Failed to parse JSON");
-
-        // Pick a random verb
         let mut rng = thread_rng();
         verbs
             .choose(&mut rng)
@@ -63,7 +55,7 @@ impl Game {
             .clone()
     }
 
-    // TODO: Implement getting random combination of conjugations from
+    // TODO: Disallow some combinations
     pub fn get_random_conjugations() -> Vec<ConjugationKind> {
         let mut rng = thread_rng();
 
@@ -72,6 +64,8 @@ impl Game {
             ConjugationKind::Past,
             ConjugationKind::Te,
             ConjugationKind::Desire,
+            ConjugationKind::Passive,
+            ConjugationKind::Continuous,
         ];
 
         loop {
@@ -90,18 +84,19 @@ impl Game {
 
     pub fn check_answer(&mut self, input: &str) -> Result<Feedback, ConjugationError> {
         // TODO: Don't use unwrap
-        // TODO: Incorrect, pass through correct string
         self.round
             .word_to_conjugate
             .conjugate(&mut self.round.conjugations_to_apply)
             .unwrap();
 
-        let hiragana_ans = self.round.word_to_conjugate.get_hiragana();
+        self.attempts += 1;
 
-        if &input.to_hiragana() != &hiragana_ans {
-            Ok(Feedback::Incorrect(self.round.word_to_conjugate.get_word()))
-        } else {
+        let hiragana_ans = self.round.word_to_conjugate.get_hiragana();
+        if &input.to_hiragana() == &hiragana_ans {
+            self.correct_count += 1;
             Ok(Feedback::Correct)
+        } else {
+            Ok(Feedback::Incorrect(self.round.word_to_conjugate.get_word()))
         }
     }
 }
